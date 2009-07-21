@@ -46,7 +46,7 @@ public class LocationService extends Service {
 			List<Address> myList = gc.getFromLocation(lat, lon, 1);
 			addr = myList.get(0);
 		}catch(Exception e){
-			Log.e("PhoneFinder","LocationService Exception", e );
+			Log.e("Whereami","LocationService Exception", e );
 			return slocation;
 		}		
 
@@ -67,9 +67,8 @@ public class LocationService extends Service {
 		
 		return slocation;
 	}
-	/*
-	 * http://www.maximyudin.com/2008/12/07/android/vklyuchenievyklyuchenie-gps-na-g1-programmno/
-	 */
+	
+	
 	private boolean getGPSStatus()
 	{
 		String allowedLocationProviders =
@@ -130,7 +129,7 @@ public class LocationService extends Service {
         LocationListener locationListener = new LocationListener() {
 			public void onLocationChanged(Location location) {
 				// TODO Auto-generated method stub
-				PendingIntent dummyEvent = PendingIntent.getBroadcast(getApplicationContext(), 0, new Intent("com.yuki.phonefinder.IGNORE_ME"), 0);
+				PendingIntent dummyEvent = PendingIntent.getBroadcast(getApplicationContext(), 0, new Intent("org.addhen.whereami.IGNORE_ME"), 0);
 
 				SmsManager.getDefault().sendTextMessage(intent.getExtras().getString("dest"), null, getAddr(location), dummyEvent, dummyEvent);
 				
