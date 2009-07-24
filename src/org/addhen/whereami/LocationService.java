@@ -3,6 +3,8 @@ package org.addhen.whereami;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Locale;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import android.app.Notification;
 import android.app.NotificationManager;
@@ -20,10 +22,15 @@ import android.os.IBinder;
 import android.provider.Settings;
 import android.telephony.gsm.SmsManager;
 import android.util.Log;
+import android.widget.Toast;
 
 public class LocationService extends Service {
 	private NotificationManager mNM;
-	LocationManager locationManager;
+	private LocationManager locationManager;
+	private Timer timer = new Timer();
+	private static final long UPDATE_INTERVAL = 5000;
+	private String currentLocation = "";
+	
 	@Override
 	public IBinder onBind(Intent arg0) {
 		// TODO Auto-generated method stub
@@ -32,8 +39,15 @@ public class LocationService extends Service {
 	
 	@Override  
 	public void onCreate() {  
+		super.onCreate();
+		locationManager= (LocationManager) 
+	    getSystemService(Context.LOCATION_SERVICE);
 		mNM = (NotificationManager)getSystemService(NOTIFICATION_SERVICE);
-		locationManager = (LocationManager)getSystemService(Context.LOCATION_SERVICE);
+
+        // Display a notification about us starting.
+        showNotification();
+        Toast.makeText(this, getLocation()+" here", Toast.LENGTH_SHORT).show();
+		Log.i("Location service", currentLocation +"Hello Henry" );
 	}
 	
 	public String getAddr(Location location){
@@ -50,21 +64,19 @@ public class LocationService extends Service {
 			return slocation;
 		}		
 
-		slocation = addr.getLocality();
-		slocation += "|Lat:" + String.format("%f",lat);
-		slocation += "|Lon:" + String.format("%f",lon);
+		slocation = addr.getLocality()+"\n";
+		slocation += "Lat: " + String.format("%f",lat)+"\n";
+		slocation += "Lon: " + String.format("%f",lon)+"\n";
 		if( addr.getThoroughfare() != null )
-			slocation += "|" + addr.getThoroughfare();
+			slocation += "Address: " + addr.getThoroughfare()+"\n";
 		if( addr.getFeatureName() != null )
-			slocation += "|" + addr.getFeatureName();
+			slocation += "Feature Name: " + addr.getFeatureName()+"\n";
 		if( addr.getAdminArea() != null )
-			slocation += "|" + addr.getAdminArea();
+			slocation += "Admin Area: " + addr.getAdminArea()+"\n";
 		if( addr.getSubAdminArea() != null )
-			slocation += "|" + addr.getSubAdminArea();
+			slocation += "Sub Admin Area: " + addr.getSubAdminArea()+"\n";
 		if( addr.getPostalCode() != null )
-			slocation += "|" + addr.getPostalCode();
-		slocation += "\n" + String.format("http://maps.google.com/maps?q=%f", lat) + "%20" + String.format("%f", lon);
-		
+			slocation += "Postal code: " + addr.getPostalCode()+"\n";		
 		return slocation;
 	}
 	
@@ -130,7 +142,8 @@ public class LocationService extends Service {
 			public void onLocationChanged(Location location) {
 				// TODO Auto-generated method stub
 				PendingIntent dummyEvent = PendingIntent.getBroadcast(getApplicationContext(), 0, new Intent("org.addhen.whereami.IGNORE_ME"), 0);
-
+				//setLocation(getAddr(location));
+				Whereami.sendLocationInfo(getAddr(location));
 				SmsManager.getDefault().sendTextMessage(intent.getExtras().getString("dest"), null, getAddr(location), dummyEvent, dummyEvent);
 				
 				locationManager.removeUpdates(this);
@@ -150,7 +163,7 @@ public class LocationService extends Service {
 				// TODO Auto-generated method stub
 				
 			}
-		};
+		}; 
 		
 		locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
    
@@ -158,13 +171,85 @@ public class LocationService extends Service {
 		if (location == null)
 			location = locationManager.getLastKnownLocation("network");
 
-		PendingIntent dummyEvent = PendingIntent.getBroadcast(this, 0, new Intent("com.yuki.phonefinder.IGNORE_ME"), 0);
-		
+		PendingIntent dummyEvent = PendingIntent.getBroadcast(this, 0, new Intent("org.addhen.whereami.IGNORE_ME"), 0);
+		setLocation(getAddr(location));
+		Whereami.sendLocationInfo(getAddr(location));
 		SmsManager.getDefault().sendTextMessage(intent.getExtras().getString("dest"), null, getAddr(location), dummyEvent, dummyEvent);
+	
 	}
 	
 	public void onDestroy(){
-		
+		shutdownLocationService();	
 	}
+	
+	/**
+	 * Starte the service
+	 * 
+	 */
+	public void startLocationService() {
+		timer.scheduleAtFixedRate(
+			new TimerTask() {
+			        public void run() {
+			        	dispatchLocationInfo();
+			        }
+			      },
+			      0,
+			      UPDATE_INTERVAL);
+			  //Log.i(getClass().getSimpleName(), "Timer started!!!");
+		Toast.makeText(this, "LocationService Started! "+getLocation(), Toast.LENGTH_SHORT).show();
+	}
+	
+	/**
+	 * shutdown service
+	 */
+	public void shutdownLocationService() {
+		
+		if( timer != null ) {
+			timer.cancel();
+		}
+		Toast.makeText(this, "LocationService Stopped!", Toast.LENGTH_SHORT).show();
+		//Log.i(getClass().getSimpleName(), "Timer stopped!!!");
+	}
+	
+	/**
+	 * Send location updates to a webservice
+	 */
+	public void dispatchLocationInfo() {
+		Toast.makeText(this, getLocation()+" here", Toast.LENGTH_SHORT).show();
+		Log.i("Location service", currentLocation +"Hello Henry" );
+	}
+	
+	/**
+     * Show a notification while this service is running.
+     */
+    private void showNotification() {
+        // In this sample, we'll use the same text for the ticker and the expanded notification
+        CharSequence text = getText(R.string.app_name);
 
+        // Set the icon, scrolling text and timestamp
+        Notification notification = new Notification(R.drawable.icon, text,
+                System.currentTimeMillis());
+
+        // The PendingIntent to launch our activity if the user selects this notification
+        PendingIntent contentIntent = PendingIntent.getActivity(this, 0,
+                new Intent(this, Whereami.class), 0);
+
+        // Set the info for the views that show in the notification panel.
+        notification.setLatestEventInfo(this, getText(R.string.app_name),
+                       text, contentIntent);
+        // Send the notification.
+        // We use a string id because it is a unique number.  We use it later to cancel.
+        mNM.notify(R.string.app_name, notification);
+    }
+    
+    public void setLocation( String location ) {
+    	this.currentLocation = location;
+    }
+    
+    public String getLocation() {
+    	return this.currentLocation;
+    }
+	
+	
 }
+
